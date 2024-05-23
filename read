@@ -1,0 +1,88 @@
+非高可用：DNS-server只负责域名解析ip，这个ip对应的服务是否可用，DNS-server是不保证的，假设有一个web-server挂了，部分服务会受到影响
+
+
+LVS 负责负载均衡，
+Keepalived 负责 VIP 的故障转移。Keepalived 会自动将 LVS 的 VIP 切换到备节点
+LVS软件组成lvs由两段代码组成，ipvsadm和ipvs。ipvs（ip virtual server）：
+一段代码工作在内核空间，叫ipvs，是真正生效实现调度的代码。ipvsadm：另外一段是工作在用户空间，叫ipvsadm，负责为ipvs内核框架编写规则，
+定义谁是集群服务，而谁是后端真实的服务器（Real Server）。
+
+作者：Mr.编程技术栈
+链接：https://www.zhihu.com/question/350005024/answer/2489648530
+来源：知乎
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+https://www.zhihu.com/question/350005024
+
+安装 ipvsadm keepalived
+在两台机器上，执行以下命令，安装 ipvsadm keepalived 软件包：
+yum install -y ipvsadm  keepalived
+
+
+配置keepalived
+在master机器上，执行以下命令，配置 Keepalived：
+vim /etc/keepalived/keepalived.conf
+
+
+添加以下内容：
+global_defs {
+   router_id 1
+}
+vrrp_instance VI_1 {
+    state MASTER
+    interface enp0s3
+
+    virtual_router_id 1
+    mcast_src_ip 10.9.2.121
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass 123456
+    }
+    virtual_ipaddress
+ {
+        10.9.2.120
+    }
+}
+在 backup机器上，执行以下命令，配置 Keepalived：
+vim /etc/keepalived/keepalived.conf
+添加以下内容：
+global_defs {
+   router_id 2
+}
+vrrp_instance VI_1 {
+    state BACKUP
+    interface enp0s3
+    virtual_router_id 1
+    mcast_src_ip 10.9.2.122
+    priority 90
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass 123456
+    }
+    virtual_ipaddress {
+        10.9.2.120
+    }
+}
+保存并退出。
+在两台机器上，执行以下命令，启动 LVS 和 Keepalived：
+systemctl start keepalived
+systemctl start ipvsadm
+systemctl status ipvsadm.service
+journalctl -xe
+可以看到/bin/bash: /etc/sysconfig/ipvsadm: No such file or directory
+ipvsadm   --save > /etc/sysconfig/ipvsadm
+systemctl start ipvsadm
+systemctl status ipvsadm.service
+看看是否能ping通
+ping 10.9.2.120
+
+
+
+
+
+
+BR
+Zhansheng Bi
+
